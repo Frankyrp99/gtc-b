@@ -3,6 +3,7 @@ from .models import Solicitud
 
 
 class SolicitudSerializer(serializers.ModelSerializer):
+    
     class Meta:
         model = Solicitud
         fields = "__all__"

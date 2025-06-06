@@ -14,15 +14,19 @@ class SolicitudListCreateView(ListCreateAPIView):
         data = request.data
         new_status = data.get("estado", "En Proceso")
 
-        # Crear la solicitud inicial
-        response = super().create(request, *args, **kwargs)
-        instance = self.get_object()
+        # Crear la solicitud usando el serializer
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)  # Guarda la instancia en la BD
+        instance = serializer.instance  # ← Obtiene la instancia creada
 
-        # Si es Cancelado o Entregado, calcular días automáticamente
+        # Lógica de actualización
         if new_status in ["Cancelado", "Entregado"]:
             instance.actualizar_tiempo_proceso()
+            instance.save()  # Guardar cambios si actualizar_tiempo_proceso modifica campos
 
-        return response
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, headers=headers)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
