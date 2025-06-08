@@ -4,56 +4,49 @@ from django.contrib.auth.models import (
     PermissionsMixin,
     BaseUserManager,
 )
-from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
+
+# Create your models here
+
 
 class UserManager(BaseUserManager):
-    def create_user(self, email, password=None, **extra_fields):
+    def create_user(self, email, password, **extra_fields):
         if not email:
             raise ValueError("Falta el Email")
-        email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
+
         return user
 
-    def create_superuser(self, email, password=None, **extra_fields):
-        extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('is_active', True)
+    def create_superuser(self, email, password):
+        user = self.create_user(email, password)
+        user.is_superuser = True
+        user.is_staff = True
+        user.save(using=self._db)
 
-        if extra_fields.get('is_staff') is not True:
-            raise ValueError('Superuser must have is_staff=True.')
-        if extra_fields.get('is_superuser') is not True:
-            raise ValueError('Superuser must have is_superuser=True.')
-        return self.create_user(email, password, **extra_fields)
+        return user
+
 
 class User(AbstractBaseUser, PermissionsMixin):
-    email = models.EmailField(
-        _('email address'),
-        unique=True,
+    USER_ROLES = (
+        ("admin", "Administrador"),
+        ("especialista", "Especialista"),
+        ("invitado", "Invitado"),
     )
-    is_staff = models.BooleanField(
-        _('staff status'),
-        default=False,
-    )
-    is_active = models.BooleanField(
-        _('active'),
-        default=True,
-    )
-    date_joined = models.DateTimeField(
-        _('date joined'),
-        default=timezone.now,
-    )
+
+    email = models.EmailField(unique=True)
+    role = models.CharField(max_length=20, choices=USER_ROLES, default="invitado")
+    is_staff = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+
     objects = UserManager()
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []
+
+    USERNAME_FIELD = "email"
+
+
+class UserProfile(models.Model):
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
 
     def __str__(self):
-        return self.email
-
-    def has_perm(self, perm, obj=None):
-        return True
-
-    def has_module_perms(self, app_label):
-        return True
+        return self.user.email
