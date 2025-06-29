@@ -2,14 +2,30 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.generics import ListCreateAPIView
 from django.db.models import Prefetch
-from .models import Solicitud
+from .models import Solicitud, OpcionPersonalizada
 from .serializers import SolicitudSerializer
-
+from users.serializers import OpcionPersonalizadaSerializer
+from users.permissions import HasEntidad
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied, NotAuthenticated
+from rest_framework.authentication import TokenAuthentication
 
 class SolicitudListCreateView(ListCreateAPIView):
-    queryset = Solicitud.objects.all().order_by("id")
+   
     serializer_class = SolicitudSerializer
+    authentication_classes = [TokenAuthentication]
 
+    def get_queryset(self):
+        # Filtrar por entidad del usuario
+        if not hasattr(self.request.user, 'entidad') or not self.request.user.entidad:
+            raise PermissionDenied("Su usuario no tiene una entidad asignada")
+            
+        return Solicitud.objects.filter(
+            entidad=self.request.user.entidad
+        ).order_by("id")
+
+    
+    
     def create(self, request, *args, **kwargs):
         data = request.data
         new_status = data.get("estado", "En Proceso")
@@ -67,3 +83,47 @@ class SolicitudRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
             instance.update_status(new_status)
         
         return Response(serializer.data, )
+    
+class OpcionesEntidadView(generics.ListCreateAPIView):
+    authentication_classes = [TokenAuthentication]
+    serializer_class = OpcionPersonalizadaSerializer
+    
+    
+    def get_queryset(self):
+        # Verificar si el usuario tiene entidad
+        if not hasattr(self.request.user, 'entidad') or not self.request.user.entidad:
+            
+            raise PermissionDenied("Su usuario no tiene una entidad asignada")
+        return OpcionPersonalizada.objects.filter(entidad=self.request.user.entidad)
+    
+    def perform_create(self, serializer):
+        if not hasattr(self.request.user, 'entidad') or not self.request.user.entidad:
+            raise PermissionDenied("Su usuario no tiene una entidad asignada")
+        serializer.save(entidad=self.request.user.entidad)
+        
+    def get_queryset(self):
+        user = self.request.user
+        
+        if not user.is_authenticated:
+            raise NotAuthenticated("Usuario no autenticado")
+            
+        print(f"Usuario autenticado: {user.email}")  # Para diagnóstico
+        
+        if not hasattr(user, 'entidad'):
+            raise PermissionDenied("El modelo de usuario no tiene atributo 'entidad'")
+            
+        if user.entidad is None:
+            raise PermissionDenied("Usuario no tiene entidad asignada")
+            
+        return OpcionPersonalizada.objects.filter(entidad=user.entidad)
+
+class OpcionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = OpcionPersonalizadaSerializer
+    authentication_classes = [TokenAuthentication]
+    
+    
+    def get_queryset(self):
+        # Verificar si el usuario tiene entidad
+        if not hasattr(self.request.user, 'entidad') or not self.request.user.entidad:
+            raise PermissionDenied("Su usuario no tiene una entidad asignada")
+        return OpcionPersonalizada.objects.filter(entidad=self.request.user.entidad)
